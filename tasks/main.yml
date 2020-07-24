@@ -68,7 +68,7 @@
     -e ATL_TOMCAT_SCHEME=https
     -e ATL_TOMCAT_SECURE=true
     -e JVM_SUPPORT_RECOMMENDED_ARGS=-Djavax.net.ssl.trustStore=/var/atlassian/application-data/jira/jira.jks
-    registry.sysmango.net/atlassian/jira-software:8.9.0
+    registry.sysmango.net/atlassian/jira-software:8.11.0
   run_once: true
   when: jira_status.rc == 1
 
