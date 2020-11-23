@@ -18,13 +18,13 @@
 - name: Set fact to carry database secret
   connection: local
   set_fact:
-    postgres_password: "{{lookup('hashi_vault', 'secret=service/database/postgres:password')}}"
+    postgres_password: "{{ lookup('hashi_vault', 'secret=secret/service/database/postgres:password') }}"
   when: jira_status.rc == 1
 
 - name: Set fact to carry jira database secret
   connection: local
   set_fact:
-    jira_db_password: "{{lookup('hashi_vault', 'secret=service/jira:jira_db_password')}}"
+    jira_db_password: "{{ lookup('hashi_vault', 'secret=secret/service/jira:jira_db_password') }}"
   when: jira_status.rc == 1
 
 
@@ -49,28 +49,59 @@
     state: present
   when: jira_status.rc == 1
 
-
 - name: Deploy jira service
-  command: >
-    docker service create -d --name jira
-    --network mangonet
-    --label traefik.port=8080
-    --label traefik.enable=true
-    --replicas 1
-    --mount type=bind,source=/var/lib/ca-certificates/pem,target=/etc/ssl/certs
-    --mount 'type=volume,"volume-opt=o=addr=files.sysmango.net,vers=4.1",volume-opt=device=:/srv/nfs/prod/jira/data,volume-opt=type=nfs,target=/var/atlassian/application-data/jira'
-    -e ATL_PROXY_NAME=jira.sysmango.net
-    -e ATL_JDBC_URL=jdbc:postgresql://postgres:5432/jira-prod
-    -e ATL_DB_DRIVER=org.postgresql.Driver
-    -e ATL_DB_SCHEMA_NAME=public
-    -e ALT_JDBC_USER=jira
-    -e ALT_JDBC_PASSWORD={{ jira_db_password }}
-    -e ATL_TOMCAT_SCHEME=https
-    -e ATL_TOMCAT_SECURE=true
-    -e JVM_SUPPORT_RECOMMENDED_ARGS=-Djavax.net.ssl.trustStore=/var/atlassian/application-data/jira/jira.jks
-    registry.sysmango.net/atlassian/jira-software:8.11.0
-  run_once: true
-  when: jira_status.rc == 1
+  community.general.docker_swarm_service:
+    state: present
+    name: jira
+    image: registry.sysmango.net/atlassian/jira-software:8.14.0
+    networks:
+      - mangonet
+    labels:
+      traefik.port: 8080
+      traefik.enable: true
+    env:
+      ATL_PROXY_NAME: jira.sysmango.net
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/jira-prod
+      ATL_DB_DRIVER: org.postgresql.Driver
+      ATL_DB_SCHEMA: public
+      ATL_JDBC_USER: jira
+      ALT_JDBC_PASSWORD: "{{ jira_db_password }}"
+      ATL_TOMCAT_SCHEME: https
+      ATL_TOMCAT_SECURE: "true"
+      JVM_SUPPORT_RECOMMENDED_ARGS: -Djavax.net.ssl.trustStore=/var/atlassian/application-data/jira/jira.jks
+    mounts:
+      - type: bind
+        source: /var/lib/ca-certificates/pem
+        target: /etc/ssl/certs
+      - type: volume
+        source:
+          driver_config:
+            name: volume
+            options: 
+              o: "addr=files.sysmango.net,vers=4.1,device=:/srv/nfs/prod/jira/data"
+              type: nfs
+        target: /var/atlassian/application-data/jira
+
+  # command: >
+  #   docker service create -d --name jira
+  #   --network mangonet
+  #   --label traefik.port=8080
+  #   --label traefik.enable=true
+  #   --replicas 1
+  #   --mount type=bind,source=/var/lib/ca-certificates/pem,target=/etc/ssl/certs
+  #   --mount 'type=volume,"volume-opt=o=addr=files.sysmango.net,vers=4.1",volume-opt=device=:/srv/nfs/prod/jira/data,volume-opt=type=nfs,target=/var/atlassian/application-data/jira'
+  #   -e ATL_PROXY_NAME=jira.sysmango.net
+  #   -e ATL_JDBC_URL=jdbc:postgresql://postgres:5432/jira-prod
+  #   -e ATL_DB_DRIVER=org.postgresql.Driver
+  #   -e ATL_DB_SCHEMA_NAME=public
+  #   -e ALT_JDBC_USER=jira
+  #   -e ALT_JDBC_PASSWORD={{ jira_db_password }}
+  #   -e ATL_TOMCAT_SCHEME=https
+  #   -e ATL_TOMCAT_SECURE=true
+  #   -e JVM_SUPPORT_RECOMMENDED_ARGS=-Djavax.net.ssl.trustStore=/var/atlassian/application-data/jira/jira.jks
+  #   registry.sysmango.net/atlassian/jira-software:8.11.0
+  # run_once: true
+  # when: jira_status.rc == 1
 
 # --mount type=bind,src=/srv/docker-volumes/jira/data,dst=/var/atlassian/jira \
 # --mount type=bind,src=/srv/docker-volumes/jira/logs,dst=/opt/atlassian/jira/logs \
